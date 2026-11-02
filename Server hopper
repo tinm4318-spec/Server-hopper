@@ -1,5 +1,5 @@
--- Server Hopper // AgarWare-Spine UI
--- Full black panel, sidebar page nav, accent strip groups, mobile-scaled.
+-- Server Hopper // Blackout-Spine UI (No Blue)
+-- Pure black + white/grey. Bigger panel, sidebar nav, accent strips, mobile-scaled.
 -- No logging. No webhooks. No data leaves the client.
 
 local Players          = game:GetService("Players")
@@ -15,7 +15,6 @@ local LP = Players.LocalPlayer
 local request = request or (syn and syn.request) or (http and http.request)
     or (fluxus and fluxus.request) or http_request
 
--- file support probe
 local supportsFiles = false
 pcall(function()
     writefile("sh_probe.tmp", "x")
@@ -23,7 +22,6 @@ pcall(function()
     delfile("sh_probe.tmp")
 end)
 
--- state
 local State = {
     destroyed     = false,
     servers       = {},
@@ -46,27 +44,27 @@ Players.PlayerRemoving:Connect(function(plr)
     end
 end)
 
--- tear down old instance
 if getgenv and getgenv().BLACKOUT_SHOP then
     pcall(function() getgenv().BLACKOUT_SHOP:Destroy() end)
 end
 
--- palette
+-- palette: black, white, grey. no blue anywhere.
 local C = {
-    bg       = Color3.fromRGB(23, 23, 23),
-    panel    = Color3.fromRGB(17, 17, 17),
+    bg       = Color3.fromRGB(10, 10, 10),
+    panel    = Color3.fromRGB(0, 0, 0),
     sidebar  = Color3.fromRGB(0, 0, 0),
-    row      = Color3.fromRGB(25, 25, 25),
-    rowHover = Color3.fromRGB(32, 32, 32),
-    stroke   = Color3.fromRGB(58, 58, 58),
-    accent   = Color3.fromRGB(0, 124, 255),
-    warn     = Color3.fromRGB(200, 180, 60),
-    danger   = Color3.fromRGB(200, 40, 40),
-    text     = Color3.fromRGB(235, 235, 235),
-    subtext  = Color3.fromRGB(150, 150, 150),
+    row      = Color3.fromRGB(18, 18, 18),
+    rowHover = Color3.fromRGB(28, 28, 28),
+    rowActive= Color3.fromRGB(35, 35, 35),
+    stroke   = Color3.fromRGB(55, 55, 55),
+    accent   = Color3.fromRGB(255, 255, 255),
+    dim      = Color3.fromRGB(160, 160, 160),
+    warn     = Color3.fromRGB(200, 200, 200),
+    danger   = Color3.fromRGB(230, 80, 80),
+    text     = Color3.fromRGB(240, 240, 240),
+    subtext  = Color3.fromRGB(140, 140, 140),
 }
 
--- helpers
 local function make(class, props, parent)
     local inst = Instance.new(class)
     for k, v in pairs(props) do inst[k] = v end
@@ -107,7 +105,8 @@ local gui = make("ScreenGui", {
 }, game.CoreGui)
 getgenv().BLACKOUT_SHOP = gui
 
-local BASE_W, BASE_H = 450, 300
+-- BIGGER base size, higher scale floor
+local BASE_W, BASE_H = 620, 440
 
 local root = make("Frame", {
     Name = "Root",
@@ -118,7 +117,7 @@ local root = make("Frame", {
     Active = true,
     ClipsDescendants = true,
 }, gui)
-corner(root, 8)
+corner(root, 10)
 stroke(root, C.stroke, 1)
 
 local uiScale = make("UIScale", { Scale = 1 }, root)
@@ -127,10 +126,11 @@ local function fitScale()
     local inset = GuiService:GetGuiInset()
     local usableW = vp.X
     local usableH = vp.Y - inset.Y - inset.Y
-    local m = 20
+    local m = 16
     local sX = (usableW - m * 2) / BASE_W
     local sY = (usableH - m * 2) / BASE_H
-    local s = math.clamp(math.min(sX, sY, 1), 0.55, 1)
+    -- floor raised from 0.55 -> 0.70 so it stays large on phones
+    local s = math.clamp(math.min(sX, sY, 1), 0.70, 1)
     uiScale.Scale = s
 end
 fitScale()
@@ -139,30 +139,31 @@ workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(functio
 end)
 
 -- top bar
+local TOP_H = 32
 local topBar = make("Frame", {
     Name = "TopBar",
-    Size = UDim2.new(1, 0, 0, 25),
+    Size = UDim2.new(1, 0, 0, TOP_H),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
 }, root)
 
 local title = make("TextLabel", {
-    Size = UDim2.new(1, -60, 1, 0),
-    Position = UDim2.fromOffset(10, 0),
+    Size = UDim2.new(1, -70, 1, 0),
+    Position = UDim2.fromOffset(14, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.Code,
-    TextSize = 12,
+    TextSize = 14,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextColor3 = C.text,
     Text = "BLACKOUT HOP",
 }, topBar)
 
 local minimizeBtn = make("TextButton", {
-    Size = UDim2.fromOffset(25, 25),
-    Position = UDim2.new(1, -25, 0, 0),
+    Size = UDim2.fromOffset(TOP_H, TOP_H),
+    Position = UDim2.new(1, -TOP_H, 0, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.Code,
-    TextSize = 14,
+    TextSize = 16,
     TextColor3 = C.text,
     Text = "-",
     AutoButtonColor = false,
@@ -197,10 +198,11 @@ do
 end
 
 -- sidebar
+local SIDE_W = 88
 local sidebar = make("ScrollingFrame", {
     Name = "SideBar",
-    Size = UDim2.new(0, 60, 1, -25),
-    Position = UDim2.new(0, 0, 0, 25),
+    Size = UDim2.new(0, SIDE_W, 1, -TOP_H),
+    Position = UDim2.new(0, 0, 0, TOP_H),
     BackgroundColor3 = C.sidebar,
     BorderSizePixel = 0,
     ScrollBarThickness = 0,
@@ -211,23 +213,26 @@ local sidebar = make("ScrollingFrame", {
 
 make("UIListLayout", {
     SortOrder = Enum.SortOrder.LayoutOrder,
-    Padding = UDim.new(0, 1),
+    Padding = UDim.new(0, 2),
 }, sidebar)
-make("UIPadding", { PaddingTop = UDim.new(0, 4) }, sidebar)
+make("UIPadding", { PaddingTop = UDim.new(0, 6) }, sidebar)
 
 local function pageButton(name, label, order)
-    return make("TextButton", {
+    local b = make("TextButton", {
         Name = name,
-        Size = UDim2.new(1, 0, 0, 25),
+        Size = UDim2.new(1, -8, 0, 34),
         LayoutOrder = order,
+        Position = UDim2.fromOffset(4, 0),
         BackgroundColor3 = C.sidebar,
         BorderSizePixel = 0,
         Font = Enum.Font.Code,
-        TextSize = 11,
+        TextSize = 13,
         TextColor3 = C.text,
         Text = label,
         AutoButtonColor = false,
     }, sidebar)
+    corner(b, 4)
+    return b
 end
 
 local mainPG     = pageButton("MainPG",     "Main",     1)
@@ -237,8 +242,8 @@ local settingsPG = pageButton("SettingsPG", "Settings", 3)
 -- content
 local content = make("Frame", {
     Name = "ContentArea",
-    Size = UDim2.new(1, -60, 1, -25),
-    Position = UDim2.new(0, 60, 0, 25),
+    Size = UDim2.new(1, -SIDE_W, 1, -TOP_H),
+    Position = UDim2.new(0, SIDE_W, 0, TOP_H),
     BackgroundColor3 = C.panel,
     BorderSizePixel = 0,
 }, root)
@@ -246,11 +251,11 @@ local content = make("Frame", {
 local function makePage(name)
     return make("ScrollingFrame", {
         Name = name,
-        Size = UDim2.new(1, -10, 1, -10),
-        Position = UDim2.fromOffset(5, 5),
+        Size = UDim2.new(1, -16, 1, -16),
+        Position = UDim2.fromOffset(8, 8),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 4,
+        ScrollBarThickness = 5,
         ScrollBarImageColor3 = C.stroke,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -265,11 +270,11 @@ local settingsPage = makePage("SettingsPage")
 for _, page in ipairs({mainPage, serversPage, settingsPage}) do
     make("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6),
+        Padding = UDim.new(0, 8),
     }, page)
 end
 
--- group builder
+-- group builder: white accent strip instead of blue
 local function makeGroup(parent, name, groupTitle, order)
     local group = make("Frame", {
         Name = name,
@@ -280,48 +285,49 @@ local function makeGroup(parent, name, groupTitle, order)
         ClipsDescendants = true,
         AutomaticSize = Enum.AutomaticSize.Y,
     }, parent)
+    corner(group, 6)
     stroke(group, C.stroke, 1)
 
     make("Frame", {
         Size = UDim2.new(1, 0, 0, 2),
-        BackgroundColor3 = C.accent,
+        BackgroundColor3 = C.accent, -- white strip, no blue
         BorderSizePixel = 0,
     }, group)
 
     make("TextLabel", {
-        Size = UDim2.new(1, -30, 0, 18),
-        Position = UDim2.fromOffset(6, 4),
+        Size = UDim2.new(1, -40, 0, 22),
+        Position = UDim2.fromOffset(10, 6),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 12,
+        TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextColor3 = C.text,
         Text = groupTitle,
     }, group)
 
     local minBtn = make("TextButton", {
-        Size = UDim2.fromOffset(20, 18),
-        Position = UDim2.new(1, -24, 0, 4),
+        Size = UDim2.fromOffset(28, 22),
+        Position = UDim2.new(1, -34, 0, 6),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 12,
+        TextSize = 14,
         TextColor3 = C.text,
         Text = "-",
         AutoButtonColor = false,
     }, group)
 
     local inner = make("Frame", {
-        Size = UDim2.new(1, -12, 0, 0),
-        Position = UDim2.fromOffset(6, 24),
+        Size = UDim2.new(1, -16, 0, 0),
+        Position = UDim2.fromOffset(8, 34),
         BackgroundTransparency = 1,
         AutomaticSize = Enum.AutomaticSize.Y,
     }, group)
 
     make("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 4),
+        Padding = UDim.new(0, 6),
     }, inner)
-    spacer(inner, 4)
+    spacer(inner, 6)
 
     local minimized = false
     minBtn.MouseButton1Click:Connect(function()
@@ -329,7 +335,7 @@ local function makeGroup(parent, name, groupTitle, order)
         inner.Visible = not minimized
         if minimized then
             group.AutomaticSize = Enum.AutomaticSize.None
-            group.Size = UDim2.new(1, 0, 0, 26)
+            group.Size = UDim2.new(1, 0, 0, 34)
             minBtn.Text = "+"
         else
             group.AutomaticSize = Enum.AutomaticSize.Y
@@ -341,11 +347,11 @@ local function makeGroup(parent, name, groupTitle, order)
     return group, inner
 end
 
--- row builders
+-- rows
 local function infoRow(parent, name, label, order)
     local row = make("Frame", {
         Name = name,
-        Size = UDim2.new(1, 0, 0, 20),
+        Size = UDim2.new(1, 0, 0, 24),
         BackgroundTransparency = 1,
         LayoutOrder = order,
     }, parent)
@@ -353,7 +359,7 @@ local function infoRow(parent, name, label, order)
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 11,
+        TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextColor3 = C.text,
         Text = label,
@@ -364,16 +370,17 @@ end
 local function buttonRow(parent, name, label, order, onClick)
     local btn = make("TextButton", {
         Name = name,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 28),
         LayoutOrder = order,
         BackgroundColor3 = C.row,
         BorderSizePixel = 0,
         Font = Enum.Font.Code,
-        TextSize = 11,
+        TextSize = 13,
         TextColor3 = C.text,
         Text = label,
         AutoButtonColor = false,
     }, parent)
+    corner(btn, 4)
     stroke(btn, C.stroke, 1)
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = C.rowHover }):Play()
@@ -390,28 +397,29 @@ end
 local function tickRow(parent, name, label, order, onChange)
     local row = make("Frame", {
         Name = name,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 28),
         BackgroundTransparency = 1,
         LayoutOrder = order,
     }, parent)
 
     local tick = make("TextButton", {
         Name = "TickBox",
-        Size = UDim2.fromOffset(16, 16),
-        Position = UDim2.fromOffset(2, 3),
+        Size = UDim2.fromOffset(20, 20),
+        Position = UDim2.fromOffset(4, 4),
         BackgroundColor3 = Color3.fromRGB(0, 0, 0),
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
     }, row)
+    corner(tick, 3)
     stroke(tick, C.stroke, 1)
 
     make("TextLabel", {
-        Size = UDim2.new(1, -30, 1, 0),
-        Position = UDim2.fromOffset(28, 0),
+        Size = UDim2.new(1, -38, 1, 0),
+        Position = UDim2.fromOffset(34, 0),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 11,
+        TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextColor3 = C.text,
         Text = label,
@@ -430,16 +438,16 @@ end
 local function inputRow(parent, name, label, placeholder, order, onConfirm)
     local row = make("Frame", {
         Name = name,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 28),
         BackgroundTransparency = 1,
         LayoutOrder = order,
     }, parent)
 
     make("TextLabel", {
-        Size = UDim2.new(0.58, 0, 1, 0),
+        Size = UDim2.new(0.55, 0, 1, 0),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 11,
+        TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextColor3 = C.text,
         Text = label,
@@ -447,12 +455,12 @@ local function inputRow(parent, name, label, placeholder, order, onConfirm)
 
     local box = make("TextBox", {
         Name = "Input",
-        Size = UDim2.new(0.4, 0, 1, 0),
-        Position = UDim2.new(0.6, 0, 0, 0),
+        Size = UDim2.new(0.42, 0, 1, 0),
+        Position = UDim2.new(0.58, 0, 0, 0),
         BackgroundColor3 = Color3.fromRGB(0, 0, 0),
         BorderSizePixel = 0,
         Font = Enum.Font.Code,
-        TextSize = 11,
+        TextSize = 12,
         TextColor3 = C.accent,
         PlaceholderText = placeholder,
         PlaceholderColor3 = C.subtext,
@@ -460,6 +468,7 @@ local function inputRow(parent, name, label, placeholder, order, onConfirm)
         ClearTextOnFocus = false,
         TextXAlignment = Enum.TextXAlignment.Center,
     }, row)
+    corner(box, 4)
     stroke(box, C.stroke, 1)
 
     box.FocusLost:Connect(function()
@@ -473,9 +482,9 @@ end
 -- MAIN PAGE
 -- ============================================================
 local _, infoInner = makeGroup(mainPage, "ServerInfoGroup", "Server Info", 1)
-local playersLbl = select(2, infoRow(infoInner, "PlayersRow", "👥 Players: 0/0", 1))
-local pingLbl    = select(2, infoRow(infoInner, "PingRow",    "📶 Ping: 0ms",   2))
-local uptimeLbl  = select(2, infoRow(infoInner, "UptimeRow",  "⌛ Uptime: 0s",   3))
+local playersLbl = select(2, infoRow(infoInner, "PlayersRow", "Players: 0/0", 1))
+local pingLbl    = select(2, infoRow(infoInner, "PingRow",    "Ping: 0ms",   2))
+local uptimeLbl  = select(2, infoRow(infoInner, "UptimeRow",  "Uptime: 0s",  3))
 
 local _, actionsInner = makeGroup(mainPage, "QuickActionsGroup", "Quick Actions", 2)
 
@@ -514,10 +523,10 @@ end)
 -- SERVERS PAGE
 -- ============================================================
 local _, controlsInner = makeGroup(serversPage, "ControlsGroup", "Controls", 1)
-local refreshBtn    = buttonRow(controlsInner, "RefreshButton",  "Refresh Servers",  1)
-local sortBtn       = buttonRow(controlsInner, "SortButton",     "Sort: Desc",       2)
-local hideFullBtn   = buttonRow(controlsInner, "HideFullButton", "Hide Full: OFF",   3)
-local _, countLbl   = infoRow(controlsInner, "CountRow", "0 servers — press refresh", 4)
+local refreshBtn  = buttonRow(controlsInner, "RefreshButton",  "Refresh Servers",  1)
+local sortBtn     = buttonRow(controlsInner, "SortButton",     "Sort: Desc",       2)
+local hideFullBtn = buttonRow(controlsInner, "HideFullButton", "Hide Full: OFF",   3)
+local _, countLbl = infoRow(controlsInner, "CountRow", "0 servers - press refresh", 4)
 
 local _, listInner = makeGroup(serversPage, "ServerListGroup", "Servers", 2)
 
@@ -541,31 +550,34 @@ local function makeServerRow(parent, server, idx)
 
     local row = make("Frame", {
         Name = "Row_" .. idx,
-        Size = UDim2.new(1, 0, 0, 36),
+        Size = UDim2.new(1, 0, 0, 46),
         BackgroundColor3 = C.row,
         BorderSizePixel = 0,
         LayoutOrder = idx,
     }, parent)
+    corner(row, 4)
     stroke(row, C.stroke, 1)
 
+    -- accent bar: white for normal, grey for full/prev, bright white for current
     local accentCol = C.accent
-    if isCurrent then accentCol = Color3.fromRGB(0, 124, 255)
+    if isCurrent then accentCol = Color3.fromRGB(255, 255, 255)
     elseif isPrev then accentCol = C.warn
     elseif isFull then accentCol = Color3.fromRGB(80, 80, 80) end
 
-    make("Frame", {
-        Size = UDim2.new(0, 2, 1, -8),
-        Position = UDim2.fromOffset(0, 4),
+    local bar = make("Frame", {
+        Size = UDim2.new(0, 3, 1, -12),
+        Position = UDim2.fromOffset(0, 6),
         BackgroundColor3 = accentCol,
         BorderSizePixel = 0,
     }, row)
+    corner(bar, 2)
 
     make("TextLabel", {
-        Size = UDim2.new(1, -80, 0, 14),
-        Position = UDim2.fromOffset(10, 3),
+        Size = UDim2.new(1, -110, 0, 18),
+        Position = UDim2.fromOffset(14, 6),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 10,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
         TextColor3 = C.text,
@@ -577,27 +589,28 @@ local function makeServerRow(parent, server, idx)
     elseif isPrev then tag = "last · " end
 
     make("TextLabel", {
-        Size = UDim2.new(1, -80, 0, 14),
-        Position = UDim2.fromOffset(10, 18),
+        Size = UDim2.new(1, -110, 0, 16),
+        Position = UDim2.fromOffset(14, 24),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 9,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextColor3 = C.subtext,
         Text = tag .. playing .. "/" .. maxP,
     }, row)
 
     local joinBtn = make("TextButton", {
-        Size = UDim2.fromOffset(64, 24),
-        Position = UDim2.new(1, -70, 0.5, -12),
+        Size = UDim2.fromOffset(84, 30),
+        Position = UDim2.new(1, -92, 0.5, -15),
         BackgroundColor3 = C.rowHover,
         BorderSizePixel = 0,
         Font = Enum.Font.Code,
-        TextSize = 10,
+        TextSize = 12,
         TextColor3 = isCurrent and C.subtext or C.accent,
         Text = isCurrent and "current" or "join",
         AutoButtonColor = false,
     }, row)
+    corner(joinBtn, 4)
     stroke(joinBtn, C.stroke, 1)
 
     if not isCurrent then
@@ -616,7 +629,7 @@ end
 local function renderServers()
     clearRows()
     if #State.servers == 0 then
-        countLbl.Text = "0 servers — press refresh"
+        countLbl.Text = "0 servers - press refresh"
         return
     end
     local shown = 0
@@ -766,13 +779,13 @@ local function setActive(page)
     serversPage.Visible  = page == "servers"
     settingsPage.Visible = page == "settings"
 
-    mainPG.BackgroundColor3     = page == "main"     and Color3.fromRGB(18, 18, 18) or C.sidebar
-    serversPG.BackgroundColor3  = page == "servers"  and Color3.fromRGB(18, 18, 18) or C.sidebar
-    settingsPG.BackgroundColor3 = page == "settings" and Color3.fromRGB(18, 18, 18) or C.sidebar
+    mainPG.BackgroundColor3     = page == "main"     and C.rowActive or C.sidebar
+    serversPG.BackgroundColor3  = page == "servers"  and C.rowActive or C.sidebar
+    settingsPG.BackgroundColor3 = page == "settings" and C.rowActive or C.sidebar
 
-    mainPG.TextColor3     = page == "main"     and C.accent or C.text
-    serversPG.TextColor3  = page == "servers"  and C.accent or C.text
-    settingsPG.TextColor3 = page == "settings" and C.accent or C.text
+    mainPG.TextColor3     = page == "main"     and C.accent or C.subtext
+    serversPG.TextColor3  = page == "servers"  and C.accent or C.subtext
+    settingsPG.TextColor3 = page == "settings" and C.accent or C.subtext
 end
 
 mainPG.MouseButton1Click:Connect(function() setActive("main") end)
@@ -788,7 +801,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
     sidebar.Visible = not minimized
     content.Visible = not minimized
     if minimized then
-        root.Size = UDim2.new(0, BASE_W, 0, 25)
+        root.Size = UDim2.new(0, BASE_W, 0, TOP_H)
         minimizeBtn.Text = "+"
     else
         root.Size = UDim2.fromOffset(BASE_W, BASE_H)
@@ -797,7 +810,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
--- TITLE / INFO UPDATES
+-- LIVE TITLE + INFO
 -- ============================================================
 local smoothedFPS = 60
 local lastFrameT  = tick()
@@ -831,9 +844,9 @@ task.spawn(function()
         local pcount = #Players:GetPlayers()
         local pmax   = Players.MaxPlayers
         local uptime = math.floor(tick() - startTime)
-        playersLbl.Text = string.format("👥 Players: %d/%d", pcount, pmax)
-        pingLbl.Text    = string.format("📶 Ping: %dms", ping)
-        uptimeLbl.Text  = string.format("⌛ Uptime: %ds", uptime)
+        playersLbl.Text = string.format("Players: %d/%d", pcount, pmax)
+        pingLbl.Text    = string.format("Ping: %dms", ping)
+        uptimeLbl.Text  = string.format("Uptime: %ds", uptime)
         task.wait(1)
     end
 end)
@@ -851,34 +864,34 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- SPLASH
+-- SPLASH (black, white border, fades)
 -- ============================================================
 local splash = make("Frame", {
-    Size = UDim2.fromOffset(300, 100),
-    Position = UDim2.new(0.5, -150, 0.5, -50),
+    Size = UDim2.fromOffset(400, 130),
+    Position = UDim2.new(0.5, -200, 0.5, -65),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
     ZIndex = 999,
 }, gui)
-corner(splash, 6)
+corner(splash, 8)
 stroke(splash, C.accent, 1)
 
 local splashTitle = make("TextLabel", {
-    Size = UDim2.new(1, 0, 0, 50),
-    Position = UDim2.fromOffset(0, 15),
+    Size = UDim2.new(1, 0, 0, 60),
+    Position = UDim2.fromOffset(0, 20),
     BackgroundTransparency = 1,
     Font = Enum.Font.Code,
-    TextSize = 26,
+    TextSize = 34,
     TextColor3 = C.accent,
     Text = "BLACKOUT HOP",
 }, splash)
 
 local splashSub = make("TextLabel", {
-    Size = UDim2.new(1, 0, 0, 20),
-    Position = UDim2.new(0, 0, 1, -25),
+    Size = UDim2.new(1, 0, 0, 24),
+    Position = UDim2.new(0, 0, 1, -30),
     BackgroundTransparency = 1,
     Font = Enum.Font.Code,
-    TextSize = 11,
+    TextSize = 13,
     TextColor3 = C.subtext,
     Text = "loading hop spine...",
 }, splash)
