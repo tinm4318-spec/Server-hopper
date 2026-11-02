@@ -1,18 +1,16 @@
--- Server Hopper // Blackout UI
--- Clean hop utility: fetches public servers, sorts, filters, teleports.
--- No data collection. No external webhooks. Everything stays local.
+-- Server Hopper // Blackout UI (Mobile Scale)
+-- Smaller root, compact rows, UIScale auto-fits phone screens.
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local LP = Players.LocalPlayer
 
--- ==== executor shims ====
 local request = request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or http_request
-local queueTeleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
 local supportsFiles = false
 do
     local ok = pcall(function()
@@ -23,36 +21,30 @@ do
     if not ok then supportsFiles = false end
 end
 
--- ==== state ====
 local STATE = {
     destroyed = false,
     updating = false,
-    ascending = false,       -- Desc by default (fullest first)
+    ascending = false,
     servers = {},
     maxServers = 100,
-    lastUpdate = 0,
     prevServerId = nil,
     hideFull = false,
-    hideCurrent = false,
 }
 
 if supportsFiles then
     pcall(function() STATE.prevServerId = readfile("sh_previous.txt") end)
 end
 
--- Remember the current job when leaving
 Players.PlayerRemoving:Connect(function(plr)
     if plr == LP and supportsFiles then
         pcall(function() writefile("sh_previous.txt", game.JobId) end)
     end
 end)
 
--- Tear down any previous instance
 if getgenv and getgenv().BLACKOUT_SERVERHOP then
     pcall(function() getgenv().BLACKOUT_SERVERHOP:Destroy() end)
 end
 
--- ==== palette ====
 local C = {
     bg        = Color3.fromRGB(8, 8, 8),
     panel     = Color3.fromRGB(16, 16, 16),
@@ -68,7 +60,6 @@ local C = {
     fill      = Color3.fromRGB(0, 210, 140),
 }
 
--- ==== helpers ====
 local function make(class, props, parent)
     local inst = Instance.new(class)
     for k, v in pairs(props) do inst[k] = v end
@@ -92,15 +83,6 @@ local function stroke(parent, color, thickness)
     return s
 end
 
-local function gradient(parent, c1, c2, rot)
-    local g = Instance.new("UIGradient")
-    g.Color = ColorSequence.new(c1, c2)
-    g.Rotation = rot or 90
-    g.Parent = parent
-    return g
-end
-
--- ==== root ====
 local gui = make("ScreenGui", {
     Name = "BlackoutServerHop",
     ResetOnSpawn = false,
@@ -109,90 +91,93 @@ local gui = make("ScreenGui", {
 }, game.CoreGui)
 getgenv().BLACKOUT_SERVERHOP = gui
 
+-- ==== root: base size kept small, UIScale shrinks on narrow screens ====
+local BASE_W, BASE_H = 320, 400
+
 local root = make("Frame", {
     Name = "Root",
-    Size = UDim2.fromOffset(460, 520),
-    Position = UDim2.new(0.5, -230, 0.5, -260),
+    Size = UDim2.fromOffset(BASE_W, BASE_H),
+    Position = UDim2.new(0.5, -BASE_W / 2, 0.5, -BASE_H / 2),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
     Active = true,
 }, gui)
-corner(root, 14)
+corner(root, 12)
 stroke(root, C.stroke, 1)
 
--- shadow
-local shadow = make("ImageLabel", {
-    Size = UDim2.new(1, 40, 1, 40),
-    Position = UDim2.fromOffset(-20, -20),
-    BackgroundTransparency = 1,
-    Image = "rbxassetid://5028857472",
-    ImageColor3 = Color3.new(0, 0, 0),
-    ImageTransparency = 0.55,
-    ScaleType = Enum.ScaleType.Slice,
-    SliceCenter = Rect.new(24, 24, 276, 276),
-    ZIndex = -1,
-}, root)
+-- UIScale so the whole thing fits mobile
+local uiScale = make("UIScale", { Scale = 1 }, root)
+local function fitScale()
+    local vp = workspace.CurrentCamera.ViewportSize
+    local inset = GuiService:GetGuiInset()
+    local usableW = vp.X
+    local usableH = vp.Y - inset.Y - inset.Y
+    local margin = 24
+    local scaleX = (usableW - margin * 2) / BASE_W
+    local scaleY = (usableH - margin * 2) / BASE_H
+    local s = math.clamp(math.min(scaleX, scaleY, 1), 0.5, 1)
+    uiScale.Scale = s
+end
+fitScale()
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    if not STATE.destroyed then fitScale() end
+end)
 
 -- ==== title bar ====
+local BAR_H = 40
 local bar = make("Frame", {
     Name = "TitleBar",
-    Size = UDim2.new(1, 0, 0, 52),
+    Size = UDim2.new(1, 0, 0, BAR_H),
     BackgroundColor3 = C.bg,
     BorderSizePixel = 0,
 }, root)
-corner(bar, 14)
-
-local barFill = make("Frame", {
-    Size = UDim2.new(1, 0, 0, 52),
-    BackgroundTransparency = 1,
-}, bar)
-local barGrad = gradient(barFill, Color3.fromRGB(20, 20, 20), Color3.fromRGB(8, 8, 8), 0)
+corner(bar, 12)
 
 local title = make("TextLabel", {
-    Size = UDim2.new(1, -120, 1, 0),
-    Position = UDim2.fromOffset(20, 0),
+    Size = UDim2.new(1, -90, 1, 0),
+    Position = UDim2.fromOffset(14, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamBold,
-    TextSize = 16,
+    TextSize = 13,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextColor3 = C.text,
     Text = "SERVER HOPPER",
 }, bar)
 
 local dot = make("Frame", {
-    Size = UDim2.fromOffset(8, 8),
-    Position = UDim2.new(1, -96, 0.5, -4),
+    Size = UDim2.fromOffset(6, 6),
+    Position = UDim2.new(1, -78, 0.5, -3),
     BackgroundColor3 = C.accent,
     BorderSizePixel = 0,
 }, bar)
-corner(dot, 4)
+corner(dot, 3)
 
 local status = make("TextLabel", {
-    Size = UDim2.fromOffset(70, 20),
-    Position = UDim2.new(1, -92, 0.5, -10),
+    Size = UDim2.fromOffset(52, 16),
+    Position = UDim2.new(1, -74, 0.5, -8),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamMedium,
-    TextSize = 11,
+    TextSize = 9,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextColor3 = C.subtext,
     Text = "idle",
 }, bar)
 
 local closeBtn = make("TextButton", {
-    Size = UDim2.fromOffset(28, 28),
-    Position = UDim2.new(1, -40, 0.5, -14),
+    Size = UDim2.fromOffset(22, 22),
+    Position = UDim2.new(1, -30, 0.5, -11),
     BackgroundColor3 = C.panel,
     BorderSizePixel = 0,
     Font = Enum.Font.GothamBold,
-    TextSize = 14,
+    TextSize = 12,
     TextColor3 = C.subtext,
     Text = "×",
     AutoButtonColor = false,
 }, bar)
-corner(closeBtn, 6)
+corner(closeBtn, 5)
 stroke(closeBtn, C.stroke, 1)
 
--- ==== drag ====
+-- ==== drag (mouse + touch) ====
 do
     local dragging, dragStart, startPos
     bar.InputBegan:Connect(function(input)
@@ -202,9 +187,7 @@ do
             dragStart = input.Position
             startPos = root.Position
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
@@ -227,25 +210,27 @@ closeBtn.MouseLeave:Connect(function()
     TweenService:Create(closeBtn, TweenInfo.new(0.12), { BackgroundColor3 = C.panel, TextColor3 = C.subtext }):Play()
 end)
 
--- ==== toolbar ====
+-- ==== toolbar: compact, wraps into two rows on narrow ====
+local TOOL_Y = BAR_H + 10
 local toolbar = make("Frame", {
-    Size = UDim2.new(1, -40, 0, 36),
-    Position = UDim2.fromOffset(20, 64),
+    Size = UDim2.new(1, -24, 0, 28),
+    Position = UDim2.fromOffset(12, TOOL_Y),
     BackgroundTransparency = 1,
 }, root)
 
-local function pillButton(label, parent, width)
+local function pill(label, parent, width, x)
     local b = make("TextButton", {
-        Size = UDim2.fromOffset(width, 36),
+        Size = UDim2.fromOffset(width, 28),
+        Position = UDim2.fromOffset(x, 0),
         BackgroundColor3 = C.panel,
         BorderSizePixel = 0,
         AutoButtonColor = false,
         Font = Enum.Font.GothamMedium,
-        TextSize = 12,
+        TextSize = 10,
         TextColor3 = C.text,
         Text = label,
     }, parent)
-    corner(b, 8)
+    corner(b, 6)
     stroke(b, C.stroke, 1)
     b.MouseEnter:Connect(function()
         TweenService:Create(b, TweenInfo.new(0.12), { BackgroundColor3 = C.rowHover }):Play()
@@ -256,79 +241,73 @@ local function pillButton(label, parent, width)
     return b
 end
 
-local refreshBtn = pillButton("Refresh", toolbar, 96)
-refreshBtn.Position = UDim2.fromOffset(0, 0)
-
-local sortBtn = pillButton("Sort: Desc", toolbar, 116)
-sortBtn.Position = UDim2.fromOffset(104, 0)
-
-local filterBtn = pillButton("Hide Full", toolbar, 96)
-filterBtn.Position = UDim2.fromOffset(228, 0)
+local refreshBtn = pill("Refresh", toolbar, 78, 0)
+local sortBtn    = pill("Sort: Desc", toolbar, 88, 86)
+local filterBtn  = pill("Hide Full", toolbar, 78, 182)
 
 -- ==== info row ====
 local infoRow = make("Frame", {
-    Size = UDim2.new(1, -40, 0, 28),
-    Position = UDim2.fromOffset(20, 108),
+    Size = UDim2.new(1, -24, 0, 18),
+    Position = UDim2.fromOffset(12, TOOL_Y + 34),
     BackgroundTransparency = 1,
 }, root)
 
 local countLabel = make("TextLabel", {
-    Size = UDim2.new(0, 200, 1, 0),
+    Size = UDim2.new(0, 140, 1, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamMedium,
-    TextSize = 11,
+    TextSize = 9,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextColor3 = C.subtext,
     Text = "no data yet",
 }, infoRow)
 
 local placeLabel = make("TextLabel", {
-    Size = UDim2.new(0, 200, 1, 0),
-    Position = UDim2.new(1, -200, 0, 0),
+    Size = UDim2.new(0, 140, 1, 0),
+    Position = UDim2.new(1, -140, 0, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamMedium,
-    TextSize = 11,
+    TextSize = 9,
     TextXAlignment = Enum.TextXAlignment.Right,
     TextColor3 = C.subtext,
     Text = "PlaceId: " .. tostring(game.PlaceId),
 }, infoRow)
 
 -- ==== list ====
+local LIST_Y = TOOL_Y + 60
+local FOOT_H = 22
 local listHolder = make("Frame", {
-    Size = UDim2.new(1, -40, 1, -190),
-    Position = UDim2.fromOffset(20, 140),
+    Size = UDim2.new(1, -24, 1, -(LIST_Y + FOOT_H + 12)),
+    Position = UDim2.fromOffset(12, LIST_Y),
     BackgroundColor3 = C.panel,
     BorderSizePixel = 0,
     ClipsDescendants = true,
 }, root)
-corner(listHolder, 10)
+corner(listHolder, 8)
 stroke(listHolder, C.stroke, 1)
 
 local scroll = make("ScrollingFrame", {
-    Size = UDim2.new(1, -16, 1, -16),
-    Position = UDim2.fromOffset(8, 8),
+    Size = UDim2.new(1, -12, 1, -12),
+    Position = UDim2.fromOffset(6, 6),
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
     CanvasSize = UDim2.new(0, 0, 0, 0),
-    ScrollBarThickness = 4,
+    ScrollBarThickness = 3,
     ScrollBarImageColor3 = C.stroke,
     AutomaticCanvasSize = Enum.AutomaticSize.Y,
 }, listHolder)
 
-local layout = make("UIListLayout", {
+make("UIListLayout", {
     SortOrder = Enum.SortOrder.LayoutOrder,
-    Padding = UDim.new(0, 6),
+    Padding = UDim.new(0, 4),
 }, scroll)
-
-local pad = make("UIPadding", {
-    PaddingRight = UDim.new(0, 4),
-}, scroll)
+make("UIPadding", { PaddingRight = UDim.new(0, 4) }, scroll)
 
 local emptyLabel = make("TextLabel", {
-    Size = UDim2.new(1, 0, 0, 60),
+    Size = UDim2.new(1, 0, 0, 40),
     BackgroundTransparency = 1,
     Font = Enum.Font.Gotham,
-    TextSize = 12,
+    TextSize = 10,
     TextColor3 = C.subtext,
     Text = "nothing loaded — hit refresh",
     Visible = true,
@@ -336,28 +315,27 @@ local emptyLabel = make("TextLabel", {
 
 -- ==== footer ====
 local footer = make("Frame", {
-    Size = UDim2.new(1, -40, 0, 32),
-    Position = UDim2.new(0, 20, 1, -44),
+    Size = UDim2.new(1, -24, 0, FOOT_H),
+    Position = UDim2.new(0, 12, 1, -(FOOT_H + 6)),
     BackgroundTransparency = 1,
 }, root)
-
-local footprint = make("TextLabel", {
+make("TextLabel", {
     Size = UDim2.new(1, 0, 1, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.Gotham,
-    TextSize = 10,
+    TextSize = 8,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextColor3 = Color3.fromRGB(80, 80, 80),
-    Text = "blackout // rate-limit aware",
+    Text = "blackout // mobile scale",
 }, footer)
 
--- ==== status update ====
+-- ==== status ====
 local function setStatus(txt, color)
     status.Text = txt
     if color then dot.BackgroundColor3 = color end
 end
 
--- ==== row builder ====
+-- ==== rows ====
 local function clearRows()
     for _, child in ipairs(scroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
@@ -372,90 +350,83 @@ local function makeRow(server, idx)
     local isPrev = supportsFiles and server.id == STATE.prevServerId
 
     if STATE.hideFull and isFull and not isCurrent then return end
-    if STATE.hideCurrent and isCurrent then return end
 
     local row = make("Frame", {
-        Size = UDim2.new(1, 0, 0, 52),
+        Size = UDim2.new(1, 0, 0, 40),
         BackgroundColor3 = C.row,
         BorderSizePixel = 0,
         LayoutOrder = idx,
     }, scroll)
-    corner(row, 8)
+    corner(row, 6)
     stroke(row, C.stroke, 1)
 
-    -- accent bar
     local accentCol = C.accent
     if isCurrent then accentCol = Color3.fromRGB(80, 120, 220)
     elseif isPrev then accentCol = C.warn
     elseif isFull then accentCol = Color3.fromRGB(80, 80, 80) end
 
     local accentBar = make("Frame", {
-        Size = UDim2.new(0, 3, 1, -16),
-        Position = UDim2.fromOffset(0, 8),
+        Size = UDim2.new(0, 2, 1, -12),
+        Position = UDim2.fromOffset(0, 6),
         BackgroundColor3 = accentCol,
         BorderSizePixel = 0,
     }, row)
-    corner(accentBar, 2)
+    corner(accentBar, 1)
 
-    -- server id (mono-ish, truncated)
-    local idLabel = make("TextLabel", {
-        Size = UDim2.new(1, -160, 0, 16),
-        Position = UDim2.fromOffset(14, 8),
+    make("TextLabel", {
+        Size = UDim2.new(1, -100, 0, 12),
+        Position = UDim2.fromOffset(10, 5),
         BackgroundTransparency = 1,
         Font = Enum.Font.Code,
-        TextSize = 11,
+        TextSize = 9,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextColor3 = C.text,
         TextTruncate = Enum.TextTruncate.AtEnd,
         Text = tostring(server.id),
     }, row)
 
-    -- tags
     local tagText = ""
-    if isCurrent then tagText = "you"
-    elseif isPrev then tagText = "last" end
+    if isCurrent then tagText = "you · "
+    elseif isPrev then tagText = "last · " end
 
-    local tagLabel = make("TextLabel", {
-        Size = UDim2.new(1, -160, 0, 14),
-        Position = UDim2.fromOffset(14, 26),
+    make("TextLabel", {
+        Size = UDim2.new(1, -100, 0, 12),
+        Position = UDim2.fromOffset(10, 20),
         BackgroundTransparency = 1,
         Font = Enum.Font.GothamMedium,
-        TextSize = 10,
+        TextSize = 8,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextColor3 = C.subtext,
-        Text = tagText ~= "" and (tagText .. " · " .. playing .. "/" .. maxP) or (playing .. "/" .. maxP),
+        Text = tagText .. playing .. "/" .. maxP,
     }, row)
 
-    -- capacity mini-bar
+    local ratio = maxP > 0 and math.clamp(playing / maxP, 0, 1) or 0
     local barBG = make("Frame", {
-        Size = UDim2.new(0, 90, 0, 6),
-        Position = UDim2.new(1, -160, 0, 10),
+        Size = UDim2.new(0, 60, 0, 5),
+        Position = UDim2.new(1, -140, 0, 7),
         BackgroundColor3 = C.panel,
         BorderSizePixel = 0,
     }, row)
-    corner(barBG, 3)
-
-    local ratio = maxP > 0 and math.clamp(playing / maxP, 0, 1) or 0
+    corner(barBG, 2)
     local barFill = make("Frame", {
         Size = UDim2.new(ratio, 0, 1, 0),
         BackgroundColor3 = ratio >= 1 and C.danger or C.fill,
         BorderSizePixel = 0,
     }, barBG)
-    corner(barFill, 3)
+    corner(barFill, 2)
 
-    -- join button
     local joinBtn = make("TextButton", {
-        Size = UDim2.new(0, 84, 0, 34),
-        Position = UDim2.new(1, -148, 0.5, -17),
+        Size = UDim2.new(0, 60, 0, 26),
+        Position = UDim2.new(1, -70, 0.5, -13),
         BackgroundColor3 = C.panel,
         BorderSizePixel = 0,
         AutoButtonColor = false,
         Font = Enum.Font.GothamBold,
-        TextSize = 12,
+        TextSize = 10,
         TextColor3 = C.accent,
         Text = isCurrent and "current" or "join",
     }, row)
-    corner(joinBtn, 6)
+    corner(joinBtn, 5)
     stroke(joinBtn, C.stroke, 1)
 
     if isCurrent then
@@ -465,35 +436,24 @@ local function makeRow(server, idx)
 
     joinBtn.MouseEnter:Connect(function()
         if isCurrent then return end
-        TweenService:Create(joinBtn, TweenInfo.new(0.12), {
-            BackgroundColor3 = C.accentDim, TextColor3 = C.text
-        }):Play()
+        TweenService:Create(joinBtn, TweenInfo.new(0.12), { BackgroundColor3 = C.accentDim, TextColor3 = C.text }):Play()
     end)
     joinBtn.MouseLeave:Connect(function()
         if isCurrent then return end
-        TweenService:Create(joinBtn, TweenInfo.new(0.12), {
-            BackgroundColor3 = C.panel, TextColor3 = C.accent
-        }):Play()
+        TweenService:Create(joinBtn, TweenInfo.new(0.12), { BackgroundColor3 = C.panel, TextColor3 = C.accent }):Play()
     end)
 
     if not isCurrent then
         joinBtn.MouseButton1Click:Connect(function()
             setStatus("hopping…", C.warn)
             joinBtn.Text = "…"
-            task.spawn(function()
-                pcall(function()
-                    if queueTeleport then
-                        queueTeleport(game:HttpGetAsync("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source").sub(1, 0)) -- no-op placeholder
-                    end
-                end)
-                local ok, err = pcall(function()
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LP)
-                end)
-                if not ok then
-                    setStatus("hop failed", C.danger)
-                    joinBtn.Text = "join"
-                end
+            local ok = pcall(function()
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LP)
             end)
+            if not ok then
+                setStatus("hop failed", C.danger)
+                joinBtn.Text = "join"
+            end
         end)
     end
 
@@ -510,13 +470,11 @@ end
 local function renderRows()
     clearRows()
     emptyLabel.Visible = false
-
     if not STATE.servers or #STATE.servers == 0 then
         emptyLabel.Visible = true
         countLabel.Text = "0 servers"
         return
     end
-
     local shown = 0
     for i, s in ipairs(STATE.servers) do
         if type(s) == "table" and s.id and s.playing and s.maxPlayers then
@@ -525,8 +483,7 @@ local function renderRows()
             if #scroll:GetChildren() > before then shown += 1 end
         end
     end
-
-    countLabel.Text = string.format("%d / %d shown", shown, #STATE.servers)
+    countLabel.Text = string.format("%d / %d", shown, #STATE.servers)
 end
 
 -- ==== fetch ====
@@ -541,7 +498,7 @@ local function fetchServers()
         local collected = {}
         local cursor = ""
         local pages = 0
-        local maxPages = 10 -- 10 x 100 = up to 1000 cap, but we trim to STATE.maxServers
+        local maxPages = 10
 
         while pages < maxPages do
             pages += 1
@@ -555,20 +512,16 @@ local function fetchServers()
                     body = res and res.Body
                 end
             end)
-
             if not body then
                 local ok2, res2 = pcall(function() return game:HttpGet(url) end)
                 if ok2 then body = res2 end
             end
-
             if not body then
                 setStatus("rate limited", C.danger)
                 break
             end
 
-            local decodeOk, decoded = pcall(function()
-                return HttpService:JSONDecode(body)
-            end)
+            local decodeOk, decoded = pcall(function() return HttpService:JSONDecode(body) end)
             if not decodeOk or not decoded or not decoded.data then
                 setStatus("bad response", C.danger)
                 break
@@ -579,20 +532,15 @@ local function fetchServers()
                     table.insert(collected, srv)
                 end
             end
-
             if #collected >= STATE.maxServers then break end
 
             cursor = decoded.nextPageCursor
             if not cursor or cursor == "" then break end
-            task.wait(0.6) -- be gentle; the endpoint is picky
+            task.wait(0.6)
         end
 
-        -- trim
-        while #collected > STATE.maxServers do
-            table.remove(collected)
-        end
+        while #collected > STATE.maxServers do table.remove(collected) end
 
-        -- sort by player count matching direction
         table.sort(collected, function(a, b)
             local pa = tonumber(a.playing) or 0
             local pb = tonumber(b.playing) or 0
@@ -600,7 +548,6 @@ local function fetchServers()
         end)
 
         STATE.servers = collected
-        STATE.lastUpdate = os.time()
         STATE.updating = false
         refreshBtn.Text = "Refresh"
         setStatus("ready", C.accent)
@@ -608,39 +555,31 @@ local function fetchServers()
     end)
 end
 
--- ==== wiring ====
 refreshBtn.MouseButton1Click:Connect(fetchServers)
-
 sortBtn.MouseButton1Click:Connect(function()
     STATE.ascending = not STATE.ascending
     sortBtn.Text = STATE.ascending and "Sort: Asc" or "Sort: Desc"
     fetchServers()
 end)
-
 filterBtn.MouseButton1Click:Connect(function()
     STATE.hideFull = not STATE.hideFull
     filterBtn.Text = STATE.hideFull and "Show Full" or "Hide Full"
     filterBtn.TextColor3 = STATE.hideFull and C.accent or C.text
     renderRows()
 end)
-
 closeBtn.MouseButton1Click:Connect(function()
     STATE.destroyed = true
     gui:Destroy()
     if getgenv then getgenv().BLACKOUT_SERVERHOP = nil end
 end)
 
--- ==== boot ====
 setStatus("booting…", C.warn)
-task.wait(0.15)
+task.wait(0.1)
 fetchServers()
 
--- auto-refresh every 90s while open
 task.spawn(function()
     while not STATE.destroyed and gui.Parent do
         task.wait(90)
-        if not STATE.destroyed and not STATE.updating then
-            fetchServers()
-        end
+        if not STATE.destroyed and not STATE.updating then fetchServers() end
     end
 end)
