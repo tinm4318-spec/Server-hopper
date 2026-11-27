@@ -1,774 +1,396 @@
---[[ d8888 888 888 d88888 888 o 888 d88P888 888 d8b 888 d88P 888 888 d888b 888 d88P 888 888d88888b888 d88P 888 88888P Y88888 d8888888888 8888P Y8888 d88P 888 888P Y888 â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â” dis.gg/AGUXmv6pv ver: 2036-8-4-0-4-0qmym9072aijwzjhc1cs created by agarv â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â” LS: 3 I: 21 M: 0 --]]
+local gui = script:FindFirstAncestorWhichIsA("ScreenGui")
+gui.Enabled = false
+local tool = Instance.new("Tool")
+tool.Name = "Rotation Tool"
+tool.RequiresHandle = false
+tool.Parent = game:GetService("Players").LocalPlayer.Backpack
 
-local DISCORD_LINK = "discord.gg/AGUXmv6pv"
+tool.Equipped:Connect(function()
+	gui.Enabled = true
+end)
+local axisframe = gui.Frame.XYZ
 
-local Whitelisted = {
-	10754470202,
-	10642124279,
-	574381128,
-	8308247571,
-	10837544781,
-	10842814389,
-	10587072700,
-	11330466586,
-}
 
-local function isWhitelisted()
-	local uid = game:GetService("Players").LocalPlayer.UserId
-	for _, allowed in ipairs(Whitelisted) do
-		if allowed == uid then return true end
+
+local arcHandles = Instance.new("ArcHandles")
+arcHandles.Parent = game:GetService("CoreGui")
+
+local selectionBox = Instance.new("SelectionBox")
+selectionBox.LineThickness = 0.05
+selectionBox.SurfaceTransparency = 1
+selectionBox.Color3 = Color3.fromRGB(255, 255, 255)
+selectionBox.Parent = game:GetService("CoreGui")
+
+local selectedPart = nil
+local ghostPart = nil
+local handlePart = nil
+local dragStartCFrame = nil
+local snapAngle = 15
+local playerMouse = game:GetService("Players").LocalPlayer:GetMouse()
+
+local function clearSelection()
+	if ghostPart then ghostPart:Destroy() end
+	if handlePart then handlePart:Destroy() end
+	ghostPart = nil
+	handlePart = nil
+	selectionBox.Adornee = nil
+	arcHandles.Adornee = nil
+	selectedPart = nil
+	dragStartCFrame = nil
+end
+
+tool.Unequipped:Connect(function()
+	gui.Enabled = false
+	clearSelection()
+end)
+
+playerMouse.Button1Down:Connect(function()
+	if not gui.Enabled then return end
+	local hitPart = playerMouse.Target
+	if hitPart and hitPart:IsDescendantOf(workspace.Bricks) and selectedPart ~= hitPart then
+		clearSelection()
+		selectedPart = hitPart
+
+		ghostPart = selectedPart:Clone()
+		ghostPart.Size = ghostPart.Size + Vector3.new(0.01, 0.01, 0.01)
+		ghostPart.Transparency = 0.5
+		ghostPart.Anchored = true
+		ghostPart.CanCollide = false
+		ghostPart.Parent = workspace
+
+		handlePart = selectedPart:Clone()
+		handlePart.Size = selectedPart.Size + Vector3.new(0.01, 0.01, 0.01)
+		handlePart.Transparency = 1
+		handlePart.Anchored = true
+		handlePart.CanCollide = false
+		handlePart.Parent = workspace
+
+		selectionBox.Adornee = ghostPart
+		arcHandles.Adornee = handlePart
+		
+		local rx, ry, rz = selectedPart.CFrame:ToEulerAnglesXYZ()
+		axisframe.X.TextBox.Text = tostring(math.round(math.deg(rx)))
+		axisframe.Y.TextBox.Text = tostring(math.round(math.deg(ry)))
+		axisframe.Z.TextBox.Text = tostring(math.round(math.deg(rz)))
 	end
-	return false
+end)
+
+arcHandles.MouseButton1Down:Connect(function(axis)
+	if not handlePart then return end
+	dragStartCFrame = handlePart.CFrame
+	arcHandles.Axes = Axes.new(axis)
+end)
+
+arcHandles.MouseDrag:Connect(function(axis, relativeAngle)
+	if not ghostPart or not dragStartCFrame then return end
+	local snapped = math.rad(math.round(math.deg(relativeAngle) / snapAngle) * snapAngle)
+	local rx, ry, rz = 0, 0, 0
+	if axis == Enum.Axis.X then rx = snapped
+	elseif axis == Enum.Axis.Y then ry = snapped
+	elseif axis == Enum.Axis.Z then rz = snapped end
+	local newCFrame = dragStartCFrame * CFrame.Angles(rx, ry, rz)
+	ghostPart.CFrame = newCFrame
+	handlePart.CFrame = newCFrame
+	local rx2, ry2, rz2 = newCFrame:ToEulerAnglesXYZ()
+	axisframe.X.TextBox.Text = tostring(math.round(math.deg(rx2)))
+	axisframe.Y.TextBox.Text = tostring(math.round(math.deg(ry2)))
+	axisframe.Z.TextBox.Text = tostring(math.round(math.deg(rz2)))
+end)
+
+arcHandles.MouseButton1Up:Connect(function()
+	arcHandles.Axes = Axes.new(Enum.Axis.X, Enum.Axis.Y, Enum.Axis.Z)
+end)
+local function applyTextBoxRotation()
+	if not ghostPart or not selectedPart then return end
+	local rx = math.rad(tonumber(axisframe.X.TextBox.Text) or 0)
+	local ry = math.rad(tonumber(axisframe.Y.TextBox.Text) or 0)
+	local rz = math.rad(tonumber(axisframe.Z.TextBox.Text) or 0)
+	local newCFrame = CFrame.new(ghostPart.Position) * CFrame.Angles(rx, ry, rz)
+	ghostPart.CFrame = newCFrame
+	handlePart.CFrame = newCFrame
+	local frx, fry, frz = newCFrame:ToEulerAnglesXYZ()
+	axisframe.X.TextBox.Text = tostring(math.round(math.deg(frx)))
+	axisframe.Y.TextBox.Text = tostring(math.round(math.deg(fry)))
+	axisframe.Z.TextBox.Text = tostring(math.round(math.deg(frz)))
 end
 
-if not isWhitelisted() then
-	local mem = {}
-	local i = 1
-	while true do
-		mem[i] = table.create(1000000, ("x"):rep(1024))
-		i = i + 1
+for _, axisname in ipairs({"X", "Y", "Z"}) do
+	axisframe[axisname].TextBox.FocusLost:Connect(function()
+		local num = tonumber(axisframe[axisname].TextBox.Text)
+		if num then
+			axisframe[axisname].TextBox.Text = tostring(math.round(num) % 360)
+		else
+			axisframe[axisname].TextBox.Text = "0"
+		end
+		applyTextBoxRotation()
+	end)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function chat(message)
+	pcall(function()
+		local channels = game:GetService("TextChatService"):WaitForChild("TextChannels", 2)
+		if channels then
+			local general = channels:FindFirstChild("RBXGeneral")
+			if general then general:SendAsync(message) return end
+		end
+		local chatEvents = game:GetService("ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents", 2)
+		if chatEvents then
+			local sayMessage = chatEvents:WaitForChild("SayMessageRequest", 2)
+			if sayMessage then sayMessage:FireServer(message, "All") end
+		end
+	end)
+end
+
+
+local function refreshtool(tool)
+	local Players = game:GetService("Players")
+	local LocalPlayer = Players.LocalPlayer
+	if not tool then return false end
+	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild(tool) then
+		return false
+	end
+	local tool = LocalPlayer.Backpack:FindFirstChild(tool)
+	if not tool then
+		return false
+	end
+	tool.Parent = LocalPlayer.Character
+	while tool.Parent == LocalPlayer.Character do
+		tool.Parent = LocalPlayer.Backpack
+		task.wait()
+	end
+	return true
+end
+
+local function equiptool(tool, equip)
+	local Players = game:GetService("Players")
+	local LocalPlayer = Players.LocalPlayer
+	if not tool then return false end
+
+	if equip then
+		if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild(tool) then
+			return false
+		end
+		local item = LocalPlayer.Backpack:FindFirstChild(tool)
+		if not item then return false end
+		item.Parent = LocalPlayer.Character
+		return true
+	else
+		if not LocalPlayer.Character then return false end
+		local item = LocalPlayer.Character:FindFirstChild(tool)
+		if not item then return false end
+		item.Parent = LocalPlayer.Backpack
+		return true
 	end
 end
 
-if setclipboard then
-	pcall(function() setclipboard(DISCORD_LINK) end)
+
+local function gethrppos()
+	return game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position
 end
 
-local AGARWARE_Universal_Hash = "d30405572e886267"
-local _st = {}
-_st[1] = "ScreenGui"
-_st[2] = "Parent"
-_st[3] = "CoreGui"
-_st[4] = "Players"
-_st[5] = "PlayerGui"
-_st[6] = "Name"
-_st[7] = "ResetOnSpawn"
-_st[8] = "DisplayOrder"
-_st[9] = "ZIndexBehavior"
-_st[10] = "Frame"
-_st[11] = "Active"
-_st[12] = Vector2.new(0.5, 0)
-_st[13] = "AnchorPoint"
-_st[14] = UDim2.new(0, 245, 0, 80)
-_st[15] = "Size"
-_st[16] = "BorderSizePixel"
-_st[17] = Color3.fromRGB(0, 0, 0)
-_st[18] = "BorderColor3"
-_st[19] = "ClipsDescendants"
-_st[20] = UDim2.new(0.5, 0, 0, 50)
-_st[21] = "Position"
-_st[22] = Color3.fromRGB(37, 37, 38)
-_st[23] = "BackgroundColor3"
-_st[24] = "TextLabel"
-_st[25] = "Title"
-_st[26] = Color3.fromRGB(47, 47, 48)
-_st[27] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-_st[28] = "FontFace"
-_st[29] = UDim2.new(1, 0, 0, 20)
-_st[30] = "TextSize"
-_st[31] = "Text"
-_st[32] = Color3.fromRGB(255, 255, 255)
-_st[33] = "TextColor3"
-_st[34] = "ZIndex"
-_st[35] = "TextButton"
-_st[36] = "MinButton"
-_st[37] = UDim2.new(0, 20, 0, 20)
-_st[38] = "Discord"
-_st[39] = Vector2.new(1, 0)
-_st[40] = "TextTransparency"
-_st[41] = UDim2.new(1, 0, 0, 0)
-_st[42] = "ImageLabel"
-_st[43] = Vector2.new(0.5, 0.5)
-_st[44] = "Image"
-_st[45] = UDim2.new(1, -8, 1, -8)
-_st[46] = "BackgroundTransparency"
-_st[47] = UDim2.new(0.5, 0, 0.5, 0)
-_st[48] = "Buttons"
-_st[49] = UDim2.new(0, 0, 0, 20)
-_st[50] = "Confirm"
-_st[51] = UDim2.new(0.5, 0, 1, 0)
-_st[52] = "Gear"
-_st[53] = UDim2.new(0.5, 0, 0, 0)
-_st[54] = "XYZ"
-_st[55] = UDim2.new(1, -10, 0, 40)
-_st[56] = UDim2.new(0.5, 0, 0, 40)
-_st[57] = "X"
-_st[58] = Color3.fromRGB(67, 67, 67)
-_st[59] = "TextXAlignment"
-_st[60] = UDim2.new(0, 75, 1, 0)
-_st[61] = "UIPadding"
-_st[62] = UDim.new(0, 10)
-_st[63] = "PaddingLeft"
-_st[64] = "TextBox"
-_st[65] = "PlaceholderColor3"
-_st[66] = Color3.fromRGB(92, 92, 92)
-_st[67] = Vector2.new(0, 0.5)
-_st[68] = "PlaceholderText"
-_st[69] = UDim2.new(1, -20, 1, -8)
-_st[70] = UDim2.new(0, 15, 0.5, 0)
-_st[71] = UDim.new(0, 5)
-_st[72] = "PaddingTop"
-_st[73] = "PaddingBottom"
-_st[74] = "UIListLayout"
-_st[75] = "FillDirection"
-_st[76] = "SortOrder"
-_st[77] = "Padding"
-_st[78] = "Y"
-_st[79] = "LayoutOrder"
-_st[80] = "Z"
 
-local GUI_Config = {getgenv = false, CoreGui = true, DontRenameLocalScript = false, LocalScriptRename = "dis.gg/AGUXmv6pv"}
-local _v = {}
-local _r = {}
-local _
-local _req = require
-require = function(m)
-	if _r[m] then return _r[m]() end
-	return _req(m)
+
+
+local Character = game:GetService("Players").LocalPlayer.Character
+local Backpack = game:GetService("Players").LocalPlayer.Backpack
+
+
+
+
+
+
+local confirm = gui.Frame.Buttons.Confirm
+
+
+local function notify(message, duration, title)
+	game:GetService("StarterGui"):SetCore("SendNotification", {
+		Title = title or "Rotation Tool",
+		Text = message,
+		Duration = duration or 5,
+	})
 end
 
-local function _rstr()
-	local c = "abcdefghijklmnopqrstuvwxyz0123456789"
-	local s = ""
-	for i = 1, math.random(10, 20) do
-		s = s .. c:sub(math.random(1, #c), math.random(1, #c))
+
+
+
+local function hastool(name)
+	return (Character and Character:FindFirstChild(name)) or Backpack:FindFirstChild(name)
+end
+
+
+local function usepainttool(block, material)
+	refreshtool("Paint")
+	local event = hastool("Paint") and hastool("Paint").Script.Event
+	if not event then
+		notify("Failed to find Paint Tool Event.")
+		return end
+	event:FireServer(block, nil, gethrppos(), "material", nil, material, "")
+end
+
+
+
+
+local function rotateblock(part, targetCFrame)
+	if part.Anchored then
+		notify("Failed to rotate block. Block not unanchored.", 3, "Failed")
+		return end
+	part.CanCollide = false
+	local power = 999999
+	local cframe = targetCFrame
+	local hoverpos = Instance.new("BodyPosition")
+	local hovergyr = Instance.new("BodyGyro")
+	hoverpos.MaxForce = Vector3.new(power, power, power)
+	hoverpos.P = power
+	hoverpos.D = 2500
+	hovergyr.MaxTorque = Vector3.new(power, power, power)
+	hovergyr.P = power
+	hovergyr.D = 6200
+	hoverpos.Position = cframe.Position
+	hovergyr.CFrame = cframe
+	hoverpos.Parent = part
+	hovergyr.Parent = part
+	repeat task.wait() until part.ReceiveAge == 0
+	part.CFrame = cframe
+	coroutine.wrap(function()
+		task.wait(1)
+		hoverpos:Destroy()
+		hovergyr:Destroy()
+	end)()
+	task.wait(0.3)
+	usepainttool(part, "anchor")
+	task.wait(0.3)
+	part.CanCollide = true
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+confirm.MouseButton1Click:Connect(function()
+	local BLOCK = selectedPart
+	local GEAR = hastool("DaggerOfShatteredDimensions")
+	
+	-- checks before starting
+	if not BLOCK then
+		notify("No block selected.", 3, "Failed") return
 	end
-	return s
-end
-
-local _G = game:GetService("RunService"):IsStudio() and _G or (GUI_Config.getgenv and getgenv() or getfenv(0))
-
-_v[1] = Instance.new(_st[1])
-pcall(protect_gui, _v[1])
-_v[1][_st[2]] = GUI_Config.CoreGui and game:GetService(_st[3]) or game:GetService(_st[4]).LocalPlayer:WaitForChild(_st[5])
-_v[1][_st[6]] = _rstr()
-_ = _v[1]
-_[_st[7]] = false
-_[_st[8]] = 2147483647
-_[_st[9]] = Enum.ZIndexBehavior.Sibling
-
-_v[2] = Instance.new(_st[10], _v[1])
-_v[2][_st[6]] = _st[10]
-_ = _v[2]
-_[_st[11]] = true
-_[_st[13]] = _st[12]
-_[_st[15]] = _st[14]
-_[_st[16]] = 0
-_[_st[18]] = _st[17]
-_[_st[19]] = true
-_[_st[21]] = _st[20]
-_[_st[23]] = _st[22]
-
-_v[3] = Instance.new(_st[24], _v[2])
-_v[3][_st[6]] = _st[25]
-_ = _v[3]
-_[_st[16]] = 0
-_[_st[23]] = _st[26]
-_[_st[28]] = _st[27]
-_[_st[15]] = _st[29]
-_[_st[30]] = 14
-_[_st[18]] = _st[17]
-_[_st[31]] = [[agarv's Rotation Tool]]
-_[_st[33]] = _st[32]
-_[_st[34]] = 999999
-
-_v[4] = Instance.new(_st[35], _v[3])
-_v[4][_st[6]] = _st[36]
-_ = _v[4]
-_[_st[16]] = 0
-_[_st[23]] = _st[26]
-_[_st[28]] = _st[27]
-_[_st[30]] = 14
-_[_st[15]] = _st[37]
-_[_st[33]] = _st[32]
-_[_st[18]] = _st[17]
-_[_st[31]] = [[_]]
-
-_v[5] = Instance.new(_st[35], _v[3])
-_v[5][_st[6]] = _st[38]
-_ = _v[5]
-_[_st[16]] = 0
-_[_st[23]] = _st[26]
-_[_st[28]] = _st[27]
-_[_st[13]] = _st[39]
-_[_st[40]] = 1
-_[_st[30]] = 14
-_[_st[15]] = _st[37]
-_[_st[33]] = _st[17]
-_[_st[18]] = _st[17]
-_[_st[31]] = [[]]
-_[_st[21]] = _st[41]
-
-_v[6] = Instance.new(_st[42], _v[5])
-_v[6][_st[6]] = _st[42]
-_ = _v[6]
-_[_st[16]] = 0
-_[_st[23]] = _st[32]
-_[_st[13]] = _st[43]
-_[_st[44]] = [[rbxassetid://75871011309830]]
-_[_st[15]] = _st[45]
-_[_st[18]] = _st[17]
-_[_st[46]] = 1
-_[_st[21]] = _st[47]
-
-_v[7] = Instance.new(_st[10], _v[2])
-_v[7][_st[6]] = _st[48]
-_ = _v[7]
-_[_st[15]] = _st[29]
-_[_st[16]] = 0
-_[_st[18]] = _st[17]
-_[_st[46]] = 1
-_[_st[21]] = _st[49]
-_[_st[23]] = _st[32]
-
-_v[8] = Instance.new(_st[35], _v[7])
-_v[8][_st[6]] = _st[50]
-_ = _v[8]
-_[_st[16]] = 0
-_[_st[23]] = _st[22]
-_[_st[28]] = _st[27]
-_[_st[30]] = 14
-_[_st[15]] = _st[51]
-_[_st[33]] = _st[32]
-_[_st[18]] = _st[17]
-_[_st[31]] = [[Confirm]]
-
-_v[9] = Instance.new(_st[35], _v[7])
-_v[9][_st[6]] = _st[52]
-_ = _v[9]
-_[_st[16]] = 0
-_[_st[23]] = _st[22]
-_[_st[28]] = _st[27]
-_[_st[30]] = 14
-_[_st[15]] = _st[51]
-_[_st[33]] = _st[32]
-_[_st[18]] = _st[17]
-_[_st[31]] = [[Get Gear]]
-_[_st[21]] = _st[53]
-
-_v[10] = Instance.new(_st[10], _v[2])
-_v[10][_st[6]] = _st[54]
-_ = _v[10]
-_[_st[13]] = _st[12]
-_[_st[15]] = _st[55]
-_[_st[16]] = 0
-_[_st[18]] = _st[17]
-_[_st[46]] = 1
-_[_st[21]] = _st[56]
-_[_st[23]] = _st[32]
-
-_v[11] = Instance.new(_st[24], _v[10])
-_v[11][_st[6]] = _st[57]
-_ = _v[11]
-_[_st[16]] = 0
-_[_st[23]] = _st[58]
-_[_st[28]] = _st[27]
-_[_st[59]] = Enum.TextXAlignment.Left
-_[_st[15]] = _st[60]
-_[_st[30]] = 14
-_[_st[18]] = _st[17]
-_[_st[31]] = [[X]]
-_[_st[33]] = _st[32]
-
-_v[12] = Instance.new(_st[61], _v[11])
-_v[12][_st[6]] = _st[61]
-_ = _v[12]
-_[_st[63]] = _st[62]
-
-_v[13] = Instance.new(_st[64], _v[11])
-_v[13][_st[6]] = _st[64]
-_ = _v[13]
-_[_st[65]] = _st[32]
-_[_st[16]] = 0
-_[_st[23]] = _st[66]
-_[_st[28]] = _st[27]
-_[_st[13]] = _st[67]
-_[_st[30]] = 14
-_[_st[33]] = _st[32]
-_[_st[68]] = [[0]]
-_[_st[15]] = _st[69]
-_[_st[18]] = _st[17]
-_[_st[31]] = [[360]]
-_[_st[21]] = _st[70]
-
-_v[14] = Instance.new(_st[61], _v[10])
-_v[14][_st[6]] = _st[61]
-_ = _v[14]
-_[_st[72]] = _st[71]
-_[_st[73]] = _st[71]
-
-_v[15] = Instance.new(_st[74], _v[10])
-_v[15][_st[6]] = _st[74]
-_ = _v[15]
-_[_st[75]] = Enum.FillDirection.Horizontal
-_[_st[76]] = Enum.SortOrder.LayoutOrder
-_[_st[77]] = _st[71]
-
-_v[16] = Instance.new(_st[24], _v[10])
-_v[16][_st[6]] = _st[78]
-_ = _v[16]
-_[_st[16]] = 0
-_[_st[23]] = _st[58]
-_[_st[28]] = _st[27]
-_[_st[59]] = Enum.TextXAlignment.Left
-_[_st[15]] = _st[60]
-_[_st[30]] = 14
-_[_st[79]] = 1
-_[_st[18]] = _st[17]
-_[_st[31]] = [[Y]]
-_[_st[33]] = _st[32]
-
-_v[17] = Instance.new(_st[61], _v[16])
-_v[17][_st[6]] = _st[61]
-_ = _v[17]
-_[_st[63]] = _st[62]
-
-_v[18] = Instance.new(_st[64], _v[16])
-_v[18][_st[6]] = _st[64]
-_ = _v[18]
-_[_st[65]] = _st[32]
-_[_st[16]] = 0
-_[_st[23]] = _st[66]
-_[_st[28]] = _st[27]
-_[_st[13]] = _st[67]
-_[_st[30]] = 14
-_[_st[33]] = _st[32]
-_[_st[68]] = [[0]]
-_[_st[15]] = _st[69]
-_[_st[18]] = _st[17]
-_[_st[31]] = [[360]]
-_[_st[21]] = _st[70]
-
-_v[19] = Instance.new(_st[24], _v[10])
-_v[19][_st[6]] = _st[80]
-_ = _v[19]
-_[_st[16]] = 0
-_[_st[23]] = _st[58]
-_[_st[28]] = _st[27]
-_[_st[59]] = Enum.TextXAlignment.Left
-_[_st[15]] = _st[60]
-_[_st[30]] = 14
-_[_st[79]] = 2
-_[_st[18]] = _st[17]
-_[_st[31]] = [[Z]]
-_[_st[33]] = _st[32]
-
-_v[20] = Instance.new(_st[61], _v[19])
-_v[20][_st[6]] = _st[61]
-_ = _v[20]
-_[_st[63]] = _st[62]
-
-_v[21] = Instance.new(_st[64], _v[19])
-_v[21][_st[6]] = _st[64]
-_ = _v[21]
-_[_st[65]] = _st[32]
-_[_st[16]] = 0
-_[_st[23]] = _st[66]
-_[_st[28]] = _st[27]
-_[_st[13]] = _st[67]
-_[_st[30]] = 14
-_[_st[33]] = _st[32]
-_[_st[68]] = [[0]]
-_[_st[15]] = _st[69]
-_[_st[18]] = _st[17]
-_[_st[31]] = [[360]]
-_[_st[21]] = _st[70]
-
-do
-	local function C_1_1()
-		local ok, err = pcall(function()
-			local _p = _v[1]
-			local script = setmetatable({Name = "startup", Parent = _p}, {__index = function(t, k)
-				if k == "FindFirstAncestorWhichIsA" then
-					return function(_, c)
-						local cur = _p
-						while cur do
-							if cur:IsA(c) then return cur end
-							cur = cur.Parent
-						end
-					end
-				end
-				local v = _p[k]
-				if type(v) == "function" then return function(_, ...) return v(_p, ...) end end
-				return v
-			end})
-			local gui = script.Parent
-			gui.Frame.Draggable = true
-		end)
-		if not ok then warn(err) end
+	if (BLOCK.Position - gethrppos()).Magnitude > 30 then
+		notify("Too far away from the block.", 3, "Failed") return
 	end
-	task.defer(C_1_1)
-end
-
-do
-	local function C_1_2()
-		local ok, err = pcall(function()
-			local _p = _v[1]
-			local script = setmetatable({Name = "system", Parent = _p}, {__index = function(t, k)
-				if k == "FindFirstAncestorWhichIsA" then
-					return function(_, c)
-						local cur = _p
-						while cur do
-							if cur:IsA(c) then return cur end
-							cur = cur.Parent
-						end
-					end
-				end
-				local v = _p[k]
-				if type(v) == "function" then return function(_, ...) return v(_p, ...) end end
-				return v
-			end})
-
-			local gui = script:FindFirstAncestorWhichIsA("ScreenGui")
-			gui.Enabled = false
-			local tool = Instance.new("Tool")
-			tool.Name = "Rotation Tool"
-			tool.RequiresHandle = false
-			tool.Parent = game:GetService("Players").LocalPlayer.Backpack
-			tool.Equipped:Connect(function() gui.Enabled = true end)
-
-			local axisframe = gui.Frame.XYZ
-			local arcHandles = Instance.new("ArcHandles")
-			arcHandles.Parent = game:GetService("CoreGui")
-			local selectionBox = Instance.new("SelectionBox")
-			selectionBox.LineThickness = 0.05
-			selectionBox.SurfaceTransparency = 1
-			selectionBox.Color3 = Color3.fromRGB(255, 255, 255)
-			selectionBox.Parent = game:GetService("CoreGui")
-
-			local selectedPart = nil
-			local ghostPart = nil
-			local handlePart = nil
-			local dragStartCFrame = nil
-			local snapAngle = 15
-			local playerMouse = game:GetService("Players").LocalPlayer:GetMouse()
-
-			local function clearSelection()
-				if ghostPart then ghostPart:Destroy() end
-				if handlePart then handlePart:Destroy() end
-				ghostPart = nil
-				handlePart = nil
-				selectionBox.Adornee = nil
-				arcHandles.Adornee = nil
-				selectedPart = nil
-				dragStartCFrame = nil
-			end
-
-			tool.Unequipped:Connect(function()
-				gui.Enabled = false
-				clearSelection()
-			end)
-
-			playerMouse.Button1Down:Connect(function()
-				if not gui.Enabled then return end
-				local hitPart = playerMouse.Target
-				if hitPart and hitPart:IsDescendantOf(workspace.Bricks) and selectedPart ~= hitPart then
-					clearSelection()
-					selectedPart = hitPart
-					ghostPart = selectedPart:Clone()
-					ghostPart.Size = ghostPart.Size + Vector3.new(0.01, 0.01, 0.01)
-					ghostPart.Transparency = 0.5
-					ghostPart.Anchored = true
-					ghostPart.CanCollide = false
-					ghostPart.Parent = workspace
-					handlePart = selectedPart:Clone()
-					handlePart.Size = selectedPart.Size + Vector3.new(0.01, 0.01, 0.01)
-					handlePart.Transparency = 1
-					handlePart.Anchored = true
-					handlePart.CanCollide = false
-					handlePart.Parent = workspace
-					selectionBox.Adornee = ghostPart
-					arcHandles.Adornee = handlePart
-					local rx, ry, rz = selectedPart.CFrame:ToEulerAnglesXYZ()
-					axisframe.X.TextBox.Text = tostring(math.round(math.deg(rx)))
-					axisframe.Y.TextBox.Text = tostring(math.round(math.deg(ry)))
-					axisframe.Z.TextBox.Text = tostring(math.round(math.deg(rz)))
-				end
-			end)
-
-			arcHandles.MouseButton1Down:Connect(function(axis)
-				if not handlePart then return end
-				dragStartCFrame = handlePart.CFrame
-				arcHandles.Axes = Axes.new(axis)
-			end)
-
-			arcHandles.MouseDrag:Connect(function(axis, relativeAngle)
-				if not ghostPart or not dragStartCFrame then return end
-				local snapped = math.rad(math.round(math.deg(relativeAngle) / snapAngle) * snapAngle)
-				local rx, ry, rz = 0, 0, 0
-				if axis == Enum.Axis.X then rx = snapped
-				elseif axis == Enum.Axis.Y then ry = snapped
-				elseif axis == Enum.Axis.Z then rz = snapped end
-				local newCFrame = dragStartCFrame * CFrame.Angles(rx, ry, rz)
-				ghostPart.CFrame = newCFrame
-				handlePart.CFrame = newCFrame
-				local rx2, ry2, rz2 = newCFrame:ToEulerAnglesXYZ()
-				axisframe.X.TextBox.Text = tostring(math.round(math.deg(rx2)))
-				axisframe.Y.TextBox.Text = tostring(math.round(math.deg(ry2)))
-				axisframe.Z.TextBox.Text = tostring(math.round(math.deg(rz2)))
-			end)
-
-			arcHandles.MouseButton1Up:Connect(function()
-				arcHandles.Axes = Axes.new(Enum.Axis.X, Enum.Axis.Y, Enum.Axis.Z)
-			end)
-
-			local function applyTextBoxRotation()
-				if not ghostPart or not selectedPart then return end
-				local rx = math.rad(tonumber(axisframe.X.TextBox.Text) or 0)
-				local ry = math.rad(tonumber(axisframe.Y.TextBox.Text) or 0)
-				local rz = math.rad(tonumber(axisframe.Z.TextBox.Text) or 0)
-				local newCFrame = CFrame.new(ghostPart.Position) * CFrame.Angles(rx, ry, rz)
-				ghostPart.CFrame = newCFrame
-				handlePart.CFrame = newCFrame
-				local frx, fry, frz = newCFrame:ToEulerAnglesXYZ()
-				axisframe.X.TextBox.Text = tostring(math.round(math.deg(frx)))
-				axisframe.Y.TextBox.Text = tostring(math.round(math.deg(fry)))
-				axisframe.Z.TextBox.Text = tostring(math.round(math.deg(frz)))
-			end
-
-			for _, axisname in ipairs({"X", "Y", "Z"}) do
-				axisframe[axisname].TextBox.FocusLost:Connect(function()
-					local num = tonumber(axisframe[axisname].TextBox.Text)
-					if num then
-						axisframe[axisname].TextBox.Text = tostring(math.round(num) % 360)
-					else
-						axisframe[axisname].TextBox.Text = "0"
-					end
-					applyTextBoxRotation()
-				end)
-			end
-
-			local function chat(message)
-				pcall(function()
-					local channels = game:GetService("TextChatService"):WaitForChild("TextChannels", 2)
-					if channels then
-						local general = channels:FindFirstChild("RBXGeneral")
-						if general then general:SendAsync(message) return end
-					end
-					local chatEvents = game:GetService("ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents", 2)
-					if chatEvents then
-						local sayMessage = chatEvents:WaitForChild("SayMessageRequest", 2)
-						if sayMessage then sayMessage:FireServer(message, "All") end
-					end
-				end)
-			end
-
-			local function refreshtool(tool)
-				local Players = game:GetService("Players")
-				local LocalPlayer = Players.LocalPlayer
-				if not tool then return false end
-				if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild(tool) then return false end
-				local tool = LocalPlayer.Backpack:FindFirstChild(tool)
-				if not tool then return false end
-				tool.Parent = LocalPlayer.Character
-				while tool.Parent == LocalPlayer.Character do
-					tool.Parent = LocalPlayer.Backpack
-					task.wait()
-				end
-				return true
-			end
-
-			local function equiptool(tool, equip)
-				local Players = game:GetService("Players")
-				local LocalPlayer = Players.LocalPlayer
-				if not tool then return false end
-				if equip then
-					if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild(tool) then return false end
-					local item = LocalPlayer.Backpack:FindFirstChild(tool)
-					if not item then return false end
-					item.Parent = LocalPlayer.Character
-					return true
-				else
-					if not LocalPlayer.Character then return false end
-					local item = LocalPlayer.Character:FindFirstChild(tool)
-					if not item then return false end
-					item.Parent = LocalPlayer.Backpack
-					return true
-				end
-			end
-
-			local function gethrppos()
-				return game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position
-			end
-
-			local Character = game:GetService("Players").LocalPlayer.Character
-			local Backpack = game:GetService("Players").LocalPlayer.Backpack
-			local confirm = gui.Frame.Buttons.Confirm
-
-			local function notify(message, duration, title)
-				game:GetService("StarterGui"):SetCore("SendNotification", {
-					Title = title or "Rotation Tool",
-					Text = message,
-					Duration = duration or 5,
-				})
-			end
-
-			local function hastool(name)
-				return (Character and Character:FindFirstChild(name)) or Backpack:FindFirstChild(name)
-			end
-
-			local function usepainttool(block, material)
-				refreshtool("Paint")
-				local event = hastool("Paint") and hastool("Paint").Script.Event
-				if not event then
-					notify("Failed to find Paint Tool Event.")
-					return
-				end
-				event:FireServer(block, nil, gethrppos(), "material", nil, material, "")
-			end
-
-			local function rotateblock(part, targetCFrame)
-				if part.Anchored then
-					notify("Failed to rotate block. Block not unanchored.", 3, "Failed")
-					return
-				end
-				part.CanCollide = false
-				local power = 999999
-				local cframe = targetCFrame
-				local hoverpos = Instance.new("BodyPosition")
-				local hovergyr = Instance.new("BodyGyro")
-				hoverpos.MaxForce = Vector3.new(power, power, power)
-				hoverpos.P = power
-				hoverpos.D = 2500
-				hovergyr.MaxTorque = Vector3.new(power, power, power)
-				hovergyr.P = power
-				hovergyr.D = 6200
-				hoverpos.Position = cframe.Position
-				hovergyr.CFrame = cframe
-				hoverpos.Parent = part
-				hovergyr.Parent = part
-				repeat task.wait() until part.ReceiveAge == 0
-				part.CFrame = cframe
-				coroutine.wrap(function()
-					task.wait(1)
-					hoverpos:Destroy()
-					hovergyr:Destroy()
-				end)()
-				task.wait(0.3)
-				usepainttool(part, "anchor")
-				task.wait(0.3)
-				part.CanCollide = true
-			end
-
-			confirm.MouseButton1Click:Connect(function()
-				local BLOCK = selectedPart
-				local GEAR = hastool("DaggerOfShatteredDimensions")
-				if not BLOCK then
-					notify("No block selected.", 3, "Failed") return
-				end
-				if (BLOCK.Position - gethrppos()).Magnitude > 30 then
-					notify("Too far away from the block.", 3, "Failed") return
-				end
-				if not hastool("Paint") then
-					notify("Paint tool not found.", 3, "Failed") return
-				end
-				if not GEAR then
-					notify("Dagger gear not found.", 3, "Failed")
-				end
-				if not GEAR.Handle.Particle.Flare.Enabled then
-					notify("Dagger gear is on cooldown.", 3, "Failed") return
-				end
-				local targetCFrame = ghostPart.CFrame
-				clearSelection()
-				notify("Sit back and relax.", 3, "Starting process...")
-				if BLOCK.Anchored then
-					equiptool("Paint", true)
-					usepainttool(BLOCK, "anchor")
-					repeat task.wait() until BLOCK.Anchored == false
-				end
-				GEAR.Remote:FireServer(Enum.KeyCode.Q)
-				equiptool("Paint", true)
-				task.wait(2)
-				usepainttool(BLOCK, "collide")
-				task.wait(0.3)
-				usepainttool(BLOCK, "collide")
-				task.wait(0.3)
-				equiptool("Paint", false)
-				if game.Workspace.Part.TimeStop then
-					repeat task.wait() until not game.Workspace:FindFirstChild("Part") or not game.Workspace:FindFirstChild("Part"):FindFirstChild("TouchInterest")
-				else
-					notify("Failed to complete rotation.", 3, "Failed") return
-				end
-				rotateblock(BLOCK, targetCFrame)
-				notify("Rotation complete.", 3, "Success")
-			end)
-
-			local getgear = gui.Frame.Buttons.Gear
-			getgear.MouseButton1Click:Connect(function()
-				local LocalPlayer = game:GetService("Players").LocalPlayer
-				if LocalPlayer.Team == "Chosen" then
-					chat(";gear 71037101")
-				elseif hastool("The Arkenstone") then
-					equiptool("The Arkenstone", true)
-					chat(";gear 71037101")
-				else
-					setclipboard("71037101")
-					notify("Enlighten not found, gear ID copied to clipboard", 3, "Gear")
-				end
-				return
-			end)
-		end)
-		if not ok then warn(err) end
+	if not hastool("Paint") then
+		notify("Paint tool not found.", 3, "Failed") return
 	end
-	task.defer(C_1_2)
-end
-
-do
-	local function C_3_3()
-		local ok, err = pcall(function()
-			local _p = _v[3]
-			local script = setmetatable({Name = "Buttons", Parent = _p}, {__index = function(t, k)
-				if k == "FindFirstAncestorWhichIsA" then
-					return function(_, c)
-						local cur = _p
-						while cur do
-							if cur:IsA(c) then return cur end
-							cur = cur.Parent
-						end
-					end
-				end
-				local v = _p[k]
-				if type(v) == "function" then return function(_, ...) return v(_p, ...) end end
-				return v
-			end})
-
-			local p = script.Parent
-			local gui = script:FindFirstAncestorWhichIsA("ScreenGui")
-			local framesizeX, framesizeY = 245, 80
-
-			p.Discord.MouseButton1Click:Connect(function()
-				local discord = DISCORD_LINK
-				pcall(function()
-					local d = game:GetService("HttpService"):JSONDecode(game:HttpGet("https://raw.githubusercontent.com/agarv0/AGARWARE/refs/heads/main/.json"))
-					discord = d.links.discord_main
-				end)
-				setclipboard(discord)
-				game:GetService("StarterGui"):SetCore("SendNotification", {
-					Title = "Copy to clipboard",
-					Text = discord,
-					Duration = 3,
-				})
-			end)
-
-			local min = false
-			p.MinButton.MouseButton1Click:Connect(function()
-				if not min then
-					min = true
-					game:GetService("TweenService"):Create(gui.Frame, TweenInfo.new(0.3), {Size = UDim2.new(0, framesizeX, 0, 20)}):Play()
-				else
-					min = false
-					game:GetService("TweenService"):Create(gui.Frame, TweenInfo.new(0.3), {Size = UDim2.new(0, framesizeX, 0, framesizeY)}):Play()
-				end
-			end)
-
-			local getgear = gui.Frame.Buttons.Gear
-			getgear.getgear.MouseButton1Click:Connect(function()
-				local setclipboard = setclipboard()
-			end)
-		end)
-		if not ok then warn(err) end
+	if not GEAR then
+		notify("Dagger gear not found.", 3, "Failed")
 	end
-	task.defer(C_3_3)
-end
+	if not GEAR.Handle.Particle.Flare.Enabled then
+		notify("Dagger gear is on cooldown.", 3, "Failed") return
+	end
+	-- end
+	
+	local targetCFrame = ghostPart.CFrame
+	clearSelection()
+	notify("Sit back and relax.", 3, "Starting process...")
+	
+	if BLOCK.Anchored then
+		equiptool("Paint", true)
+		usepainttool(BLOCK, "anchor")
+		repeat task.wait() until BLOCK.Anchored == false
+	end
+	GEAR.Remote:FireServer(Enum.KeyCode.Q)
+	equiptool("Paint", true)
+	task.wait(2)
+	usepainttool(BLOCK, "collide")
+	task.wait(0.3)
+	usepainttool(BLOCK, "collide")
+	task.wait(0.3)
+	equiptool("Paint", false)
+	if game.Workspace.Part.TimeStop then
+		repeat task.wait() until not game.Workspace:FindFirstChild("Part") or not game.Workspace:FindFirstChild("Part"):FindFirstChild("TouchInterest")
+	else
+		notify("Failed to complete rotation.", 3, "Failed") return
+	end
+	rotateblock(BLOCK, targetCFrame)
+	notify("Rotation complete.", 3, "Success")
+end)
 
-return _v[1], require
+
+
+
+
+
+
+
+
+
+
+local getgear = gui.Frame.Buttons.Gear
+getgear.MouseButton1Click:Connect(function()
+	local LocalPlayer = game:GetService("Players").LocalPlayer
+	if LocalPlayer.Team == "Chosen" then
+		chat(";gear 71037101")
+	elseif hastool("The Arkenstone") then
+		equiptool("The Arkenstone", true)
+		chat(";gear 71037101")
+	else
+		setclipboard("71037101")
+		notify("Enlighten not found, gear ID copied to clipboard", 3, "Gear")
+	end
+	return
+end)
